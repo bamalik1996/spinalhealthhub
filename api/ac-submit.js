@@ -6,9 +6,9 @@
 // ── Custom field IDs ──────────────────────────────────────
 // Find these in ActiveCampaign → Contacts → Manage Fields.
 // Each field has a numeric ID in the URL when you click to edit it.
-const FIELD_ID_CONFIDENCE = 1;   // TODO: replace with real ID
-const FIELD_ID_RUNNER_UP   = 2;   // TODO: replace with real ID
-const FIELD_ID_MARGIN      = 3;   // TODO: replace with real ID
+const FIELD_ID_CONFIDENCE = '%CONFIDENCE%';   // TODO: replace with real ID
+const FIELD_ID_RUNNER_UP   = '%RUNNERUP%';   // TODO: replace with real ID
+const FIELD_ID_MARGIN      = '%MARGIN%';   // TODO: replace with real ID
 
 // ── List ID ───────────────────────────────────────────────
 const LIST_ID = 4; // Back-Type Quiz Leads
