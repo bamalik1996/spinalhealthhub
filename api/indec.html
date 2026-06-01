@@ -1,0 +1,846 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Spinal Health Hub — Back-Type Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sofia+Sans:wght@200;300;400;500;600&family=Cormorant+Garamond:ital,wght@1,300;1,400&display=swap" rel="stylesheet">
+
+<!-- Meta Pixel (from old code) -->
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '961721436752161');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none" alt=""
+  src="https://www.facebook.com/tr?id=961721436752161&ev=PageView&noscript=1"/></noscript>
+</head>
+<body>
+
+<div class="quiz-app" id="quizApp"></div>
+
+<!-- DEV NAVIGATOR — Remove before launch -->
+<nav class="dev-nav" id="devNav" aria-label="Developer step navigator"></nav>
+
+<script>
+/* =========================================================
+   SHH BACK-TYPE QUIZ — v0.5 (ActiveCampaign integrated)
+   ========================================================= */
+
+/* ---------- SCORING MATRIX ---------- */
+const SCORING = {
+  q4_silhouette: {
+    rounded_collapsed: { slumper: 3 },
+    upright_braced:    { holder:  3 },
+    hips_forward:      { hanger:  4 },
+    shifter_card:      { shifter: 3 },
+  },
+  q5_sitting: {
+    slouching_rounded:  { slumper: 2 },
+    sitting_tall:       { holder:  2 },
+    neither_same:       {},
+    neither_relieves:   { hanger:  1 },
+  },
+  q6_standing: {
+    upright_tall:       { holder:  2 },
+    hips_forward:       { hanger:  2 },
+    neither_same:       {},
+    neither_never:      {},
+  },
+  q7_natural_posture: {
+    slouching_forward:    { slumper: 3 },
+    tensing_upright:      { holder:  3 },
+    hips_moving_forward:  { hanger:  3 },
+    neither_move_between: { shifter: 1 },
+  },
+  q8_upright_behaviour: {
+    engage_brace:   { holder:  2 },
+    slouch_relax:   { slumper: 2 },
+    settle_hips:    { hanger:  2 },
+    keep_shifting:  { shifter: 3 },
+  },
+  q9_irritation_response: {
+    stay_still_brace:   { holder:  1 },
+    slouch_into:        { slumper: 1 },
+    find_to_lean:       { hanger:  1 },
+    move_reposition:    { shifter: 3 },
+  },
+  q10_aggravator: {
+    sitting:        { slumper: 2 },
+    standing_still: { hanger:  3 },
+    walking:        { hanger:  1 },
+    bending_lifting:{ slumper: 2 },
+    varies:         { shifter: 3 },
+  },
+  q11_reaction: {
+    tense_up:           { holder:  3 },
+    slouch_relax:       { slumper: 3, hanger: 1 },
+    push_hips_forward:  { hanger:  3 },
+    move_around:        { shifter: 3 },
+    not_sure:           { /* 0 to all */ },
+  },
+};
+
+const SHIFTER_ICON = `<svg class="shifter-icon" viewBox="0 0 70 70" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="35" cy="35" r="7"/>
+  <path d="M 35 19 L 35 9 M 30 14 L 35 9 L 40 14"/>
+  <path d="M 35 51 L 35 61 M 30 56 L 35 61 L 40 56"/>
+  <path d="M 19 35 L 9 35 M 14 30 L 9 35 L 14 40"/>
+  <path d="M 51 35 L 61 35 M 56 30 L 61 35 L 56 40"/>
+</svg>`;
+
+/* ---------- LOGO ASSETS ---------- */
+const LOGO_SAGE = `<img src="https://cdn.prod.website-files.com/6a0b0b4ba54ff83adb040c91/6a0dbcabc4b57fd361e170e5_download%20(4).avif" alt="Spinal Health Hub">`;
+
+/* ActiveCampaign integration (from old code) */
+const AC_SUBMIT_URL = 'https://spinalhealthhub-two.vercel.app/api/ac-submit';
+const SUBTYPE_TAGS = {
+  holder:  'back-type-holder',
+  slumper: 'back-type-slumper',
+  hanger:  'back-type-hanger',
+  shifter: 'back-type-shifter',
+};
+
+function trackMeta(eventName, params) {
+  if (typeof window.fbq !== 'function') return;
+  if (params) fbq('track', eventName, params);
+  else fbq('track', eventName);
+}
+
+async function syncActiveCampaign(email, subtype, confidence, runnerUp, margin) {
+  const tag = SUBTYPE_TAGS[subtype];
+  if (!tag || !email) return;
+
+  const res = await fetch(AC_SUBMIT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: email.trim(),
+      tag,
+      confidence: confidence || '',
+      runnerUp: runnerUp || '',
+      margin: margin,
+    }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok) {
+    throw new Error(data.error || 'ActiveCampaign sync failed');
+  }
+}
+
+/* ---------- QUESTIONS ---------- */
+const QUESTIONS = [
+  { id: 'intro', type: 'intro' },
+  { id: 'safety', type: 'safety' },
+  { id: 'symptoms', type: 'single',
+    title: 'Which of the following best describes your usual back symptoms?',
+    options: [
+      { id: 'dull_ache',   label: 'Dull ache or general soreness' },
+      { id: 'tightness',   label: 'Tightness or stiffness' },
+      { id: 'sharp_pain',  label: 'Intense, sharp, or shooting pain' },
+      { id: 'spasming',    label: 'Spasming or gripping' },
+      { id: 'combination', label: 'A combination of the above' },
+    ],
+  },
+  { id: 'silhouette', type: 'silhouette',
+    title: 'Throughout your day, which of these best describes how you carry yourself?',
+    scoreKey: 'q4_silhouette',
+    options: [
+      { id: 'rounded_collapsed', label: 'Shoulders forward, chest dropped, back rounded', figure: 'slumper' },
+      { id: 'hips_forward',      label: 'Hips pushed forward, leaning back',              figure: 'hanger' },
+      { id: 'upright_braced',    label: 'Upright, chest lifted, standing tall',           figure: 'holder' },
+      { id: 'shifter_card',      label: "None of these — I'm always shifting position",
+        figure: 'shifter-text', textContent: 'I move around a lot — no one posture feels right for long.' },
+    ],
+  },
+  { id: 'sitting', type: 'single',
+    title: 'During sitting, when do you feel most uncomfortable?',
+    scoreKey: 'q5_sitting',
+    options: [
+      { id: 'slouching_rounded', label: 'Slouching or rounding forward' },
+      { id: 'sitting_tall',      label: 'Sitting upright' },
+      { id: 'neither_same',      label: 'Both feel about the same' },
+      { id: 'neither_relieves',  label: 'Sitting usually helps — standing is the problem' },
+    ],
+  },
+  { id: 'standing', type: 'single',
+    title: 'During standing or walking, when do you feel most uncomfortable?',
+    scoreKey: 'q6_standing',
+    options: [
+      { id: 'upright_tall',  label: 'Standing tall or walking upright' },
+      { id: 'hips_forward',  label: 'Leaning back with my hips forward' },
+      { id: 'neither_same',  label: "Standing doesn't bother me — sitting is the problem" },
+      { id: 'neither_never', label: "I'm comfortable either way" },
+    ],
+  },
+  { id: 'interstitial_1', type: 'interstitial',
+    eyebrow: 'WHY FOUR BACK TYPES?',
+    body: "Decades of research on chronic back pain show something most people don't expect — your behaviour around movement matters significantly more than the structure that shows up on a scan. Most people fall into one of four common patterns. Our questions help match you to yours.",
+  },
+  { id: 'natural_posture', type: 'single',
+    title: 'During your day, which of these feels most natural or automatic for you?',
+    scoreKey: 'q7_natural_posture',
+    options: [
+      { id: 'slouching_forward',    label: 'Drifting into a slump without realising' },
+      { id: 'tensing_upright',      label: 'Catching myself and straightening up throughout the day' },
+      { id: 'hips_moving_forward',  label: 'Leaning back and letting my hips drop forward' },
+      { id: 'neither_move_between', label: "I can't pick one — I move between all of them" },
+    ],
+  },
+  { id: 'upright_behaviour', type: 'single',
+    title: "When you're upright during the day, which of these feels most like you?",
+    scoreKey: 'q8_upright_behaviour',
+    options: [
+      { id: 'engage_brace', label: 'I actively try to hold myself upright' },
+      { id: 'slouch_relax', label: 'I usually end up slouching without meaning to' },
+      { id: 'settle_hips',  label: "I tend to lean on whatever's nearby or rest my weight on one hip" },
+      { id: 'keep_shifting',label: 'I keep shifting because nowhere feels right for long' },
+    ],
+  },
+  { id: 'irritation', type: 'single',
+    title: "When you're trying to get comfortable, which of these feels most like you?",
+    scoreKey: 'q9_irritation_response',
+    options: [
+      { id: 'stay_still_brace', label: 'I try to sit or stand a little straighter' },
+      { id: 'slouch_into',      label: "I sink into whatever I'm sitting or lying on" },
+      { id: 'find_to_lean',     label: 'I find something to lean on and take the weight off' },
+      { id: 'move_reposition',  label: 'I keep moving and repositioning — nothing settles it' },
+    ],
+  },
+  { id: 'interstitial_2', type: 'interstitial',
+    eyebrow: 'WHY GENERIC ADVICE IS INCOMPLETE',
+    body: "The same exercise that helps one person can lead another down the wrong path. It's not that the advice is wrong — it's that it's not matched. The four-pattern framework helps to bridge that gap.",
+  },
+  { id: 'aggravator', type: 'single',
+    title: 'On a typical day, which of these creates discomfort the fastest?',
+    scoreKey: 'q10_aggravator',
+    options: [
+      { id: 'sitting',         label: 'Sitting for any length of time' },
+      { id: 'standing_still',  label: 'Standing still — queuing, cooking, waiting' },
+      { id: 'walking',         label: 'Walking, especially longer distances' },
+      { id: 'bending_lifting', label: 'Bending down or picking things up' },
+      { id: 'varies',          label: 'It varies — lots of different things set it off' },
+    ],
+  },
+  { id: 'reaction', type: 'single',
+    title: 'On a typical day (not during a flare-up), what do you usually do when your back feels stiff or sore?',
+    scoreKey: 'q11_reaction',
+    options: [
+      { id: 'tense_up',          label: 'I try to hold myself straighter and protect it' },
+      { id: 'slouch_relax',      label: 'I slump down and wait for it to pass' },
+      { id: 'push_hips_forward', label: 'I lean back or find something to take the weight off' },
+      { id: 'move_around',       label: 'I keep moving — staying still makes it worse' },
+      { id: 'not_sure',          label: "I'm not sure what helps" },
+    ],
+  },
+  { id: 'motivations', type: 'multi',
+    title: 'What are your main motivations for improving your back health?',
+    hint: 'Choose all that apply.',
+    options: [
+      { id: 'active',        label: 'Become more active' },
+      { id: 'healthier',     label: 'Feel healthier and stronger' },
+      { id: 'kids',          label: 'Play with my kids freely' },
+      { id: 'social',        label: 'Participate more in social activities' },
+      { id: 'mental_health', label: 'Improve my mental health' },
+      { id: 'work',          label: 'Improve career or work performance' },
+      { id: 'relationships', label: 'Improve relationships and intimacy' },
+    ],
+  },
+  { id: 'commitment', type: 'single',
+    title: 'Could you commit 15 minutes a day to improving your back health?',
+    options: [
+      { id: 'yes', label: 'Yes' },
+      { id: 'no',  label: 'No' },
+    ],
+  },
+  { id: 'analysis', type: 'analysis' },
+  { id: 'email', type: 'email',
+    title: 'Your back type and personalised movement plan are ready. Where should we send them?',
+  },
+  { id: 'result', type: 'result' },
+];
+
+/* ---------- STATE ---------- */
+const state = {
+  step: 0,
+  answers: {},
+  email: '',
+  subtype: null,
+  scores: { holder: 0, slumper: 0, hanger: 0, shifter: 0 },
+  runnerUp: null,
+  margin: 0,
+  confidence: null,
+  isAdvancing: false,
+  shouldAnimate: true,
+  safetyOpen: false,
+  emailSubmitting: false,
+  metaEvents: { viewContent: false, completeRegistration: false },
+};
+
+const numberedStepIds = QUESTIONS
+  .filter(q => ['single','multi','silhouette'].includes(q.type))
+  .map(q => q.id);
+
+const $app = document.getElementById('quizApp');
+const $devNav = document.getElementById('devNav');
+
+/* ---------- HELPERS ---------- */
+function currentQuestion() { return QUESTIONS[state.step]; }
+function questionNumber(q) {
+  const idx = numberedStepIds.indexOf(q.id);
+  return idx === -1 ? null : idx + 1;
+}
+function progressPct() {
+  if (state.step === 0) return 0;
+  const q = currentQuestion();
+  if (q.type === 'result' || q.type === 'analysis' || q.type === 'email') return 100;
+  const numbered = questionNumber(q);
+  if (numbered === null) return Math.min(8, (state.step / QUESTIONS.length) * 100);
+  return Math.round((numbered / numberedStepIds.length) * 100);
+}
+function isAnswered(q) {
+  const ans = state.answers[q.id];
+  if (q.type === 'multi') return Array.isArray(ans) && ans.length > 0;
+  if (q.type === 'email') return state.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(state.email);
+  return !!ans;
+}
+
+/* ---------- NAVIGATION ---------- */
+function goToStep(idx) {
+  state.isAdvancing = false;
+  state.step = Math.max(0, Math.min(QUESTIONS.length - 1, idx));
+  state.shouldAnimate = true;
+  state.safetyOpen = false;
+  if (currentQuestion().type === 'analysis') computeSubtype();
+  render();
+}
+function next() { goToStep(state.step + 1); }
+function back() { goToStep(state.step - 1); }
+
+function setAnswerAndAdvance(qId, optionId) {
+  if (state.isAdvancing) return;
+  state.answers[qId] = optionId;
+  state.isAdvancing = true;
+  state.shouldAnimate = false;
+  render();
+  setTimeout(() => {
+    state.isAdvancing = false;
+    next();
+  }, 280);
+}
+
+function toggleMulti(qId, optionId) {
+  if (!state.answers[qId]) state.answers[qId] = [];
+  const arr = state.answers[qId];
+  const idx = arr.indexOf(optionId);
+  if (idx > -1) arr.splice(idx, 1); else arr.push(optionId);
+  state.shouldAnimate = false;
+  render();
+}
+
+function toggleSafetyDetail() {
+  state.safetyOpen = !state.safetyOpen;
+  state.shouldAnimate = false;
+  render();
+}
+
+/* ---------- SCORING ---------- */
+function computeSubtype() {
+  const scores = { holder: 0, slumper: 0, hanger: 0, shifter: 0 };
+  for (const q of QUESTIONS) {
+    if (!q.scoreKey) continue;
+    const ans = state.answers[q.id];
+    if (!ans) continue;
+    const opt = q.options.find(o => o.id === ans);
+    if (!opt) continue;
+    const adds = SCORING[q.scoreKey][opt.id];
+    if (!adds) continue;
+    for (const subtype in adds) scores[subtype] += adds[subtype];
+  }
+  state.scores = scores;
+  const order = ['holder', 'slumper', 'hanger', 'shifter'];
+  let maxScore = -1, winner = 'holder';
+  for (const s of order) {
+    if (scores[s] > maxScore) { maxScore = scores[s]; winner = s; }
+  }
+  state.subtype = winner;
+
+  const sortedScores = order.slice().sort((a, b) => scores[b] - scores[a]);
+  state.runnerUp = sortedScores[1];
+  state.margin = scores[winner] - scores[state.runnerUp];
+  if (state.margin >= 5)      state.confidence = 'high';
+  else if (state.margin >= 3) state.confidence = 'good';
+  else if (state.margin >= 1) state.confidence = 'thin';
+  else                        state.confidence = 'tied';
+}
+
+/* ---------- RENDERERS ---------- */
+function cardClass() {
+  return state.shouldAnimate ? 'card is-entering' : 'card';
+}
+
+function renderIntro() {
+  $app.innerHTML = `
+    <div class="intro-screen">
+      <div class="intro-stage">
+        <div class="intro-logo-row">
+          ${LOGO_SAGE}
+        </div>
+        <div class="intro-eyebrow">THE BACK-TYPE QUIZ</div>
+        <h1 class="intro-headline">
+          Your back pain isn't generic.<br>
+          <span class="intro-headline-italic">It has a pattern.</span>
+        </h1>
+        <p class="intro-subhead">
+          Most back advice fails because it treats every back the same. There are four back types &mdash; a 5-minute quiz matches you to yours, and suddenly what's been going on starts to make sense.
+        </p>
+        <button class="intro-cta" data-action="start">
+          Discover my back type
+          <span class="intro-cta-arrow">&rarr;</span>
+        </button>
+        <div class="intro-separator"></div>
+        <div class="intro-credibility">
+          Developed by <strong>Troy Sandley</strong>, AHPRA-registered physiotherapist.<br>
+          Informed by the RESTORE trial (Lancet, 2023).
+        </div>
+        <div class="intro-disclosure">
+          Spinal Health Hub is an educational wellness platform. It is not a diagnostic tool and does not constitute medical advice.<br>
+          <a href="#">About Troy</a> &middot; <a href="#">Disclosures</a> &middot; <a href="#">Privacy</a> &middot; <a href="#">Terms</a>
+        </div>
+      </div>
+    </div>
+  `;
+  $app.querySelector('[data-action="start"]').addEventListener('click', next);
+  if (!state.metaEvents.viewContent) {
+    state.metaEvents.viewContent = true;
+    trackMeta('ViewContent', { content_name: 'Back-Type Quiz Intro' });
+  }
+}
+
+function renderQuizShell(innerHtml) {
+  return `
+    <header class="quiz-header">
+      ${LOGO_SAGE}
+      <span class="step-indicator" id="stepIndicator"></span>
+    </header>
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill"></div></div>
+    <main class="stage">
+      <div class="card-wrap">${innerHtml}</div>
+    </main>
+  `;
+}
+
+function updateChrome() {
+  const $progress = document.getElementById('progressFill');
+  const $stepIndicator = document.getElementById('stepIndicator');
+  if ($progress) $progress.style.width = progressPct() + '%';
+  if ($stepIndicator) {
+    const q = currentQuestion();
+    const num = questionNumber(q);
+    $stepIndicator.innerHTML = num !== null ? `<strong>${num}</strong> / ${numberedStepIds.length}` : '';
+  }
+}
+
+function renderSafety() {
+  const isOpen = state.safetyOpen;
+  const inner = `
+    <div class="${cardClass()}">
+      <p class="eyebrow">Safety check</p>
+      <h2 class="question-title">A quick safety check before we begin.</h2>
+      <p class="safety-intro">Some unusual symptoms are best reviewed by a healthcare professional before starting a movement program.</p>
+      <button class="safety-toggle ${isOpen ? 'is-open' : ''}" data-action="toggle">
+        <svg class="safety-toggle-icon" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 4.5 6 7.5 9 4.5"/>
+        </svg>
+        ${isOpen ? 'Hide the unusual symptoms to check for' : 'Show me the unusual symptoms to check for'}
+      </button>
+      <div class="safety-detail ${isOpen ? 'is-open' : ''}">
+        <div class="safety-list">
+          <ul>
+            <li>Bladder or bowel changes</li>
+            <li>Numbness in your groin or inner thighs</li>
+            <li>Unexplained weight loss</li>
+            <li>Fever</li>
+            <li>Unrelenting night pain</li>
+            <li>Leg weakness, numbness, or pins and needles that is getting worse over time, or affects both legs</li>
+            <li>Recent significant injury or trauma to your back</li>
+          </ul>
+        </div>
+      </div>
+      <p class="safety-footnote">If any of these apply to you, we recommend consulting your healthcare provider. You may continue for educational purposes.</p>
+      <div class="nav-row">
+        <button class="btn btn-secondary" data-action="back">Go back</button>
+        <button class="btn btn-primary" data-action="continue">Continue</button>
+      </div>
+    </div>
+  `;
+  $app.innerHTML = renderQuizShell(inner);
+  $app.querySelector('[data-action="toggle"]').addEventListener('click', toggleSafetyDetail);
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+  $app.querySelector('[data-action="continue"]').addEventListener('click', next);
+}
+
+function renderSingle() {
+  const q = currentQuestion();
+  const selected = state.answers[q.id];
+  const num = questionNumber(q);
+  const optionsHtml = q.options.map(opt => `
+    <button class="option ${selected === opt.id ? 'is-selected' : ''}" data-option-id="${opt.id}">
+      ${opt.label}
+    </button>
+  `).join('');
+  const inner = `
+    <div class="${cardClass()}">
+      <p class="eyebrow">Question ${num} of ${numberedStepIds.length}</p>
+      <h2 class="question-title">${q.title}</h2>
+      ${q.hint ? `<p class="question-hint">${q.hint}</p>` : ''}
+      <div class="options">${optionsHtml}</div>
+      <div class="nav-row">
+        <button class="btn btn-secondary" data-action="back">Back</button>
+      </div>
+    </div>
+  `;
+  $app.innerHTML = renderQuizShell(inner);
+  $app.querySelectorAll('.option').forEach(btn => {
+    btn.addEventListener('click', () => setAnswerAndAdvance(q.id, btn.dataset.optionId));
+  });
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+}
+
+function renderMulti() {
+  const q = currentQuestion();
+  const selected = state.answers[q.id] || [];
+  const num = questionNumber(q);
+  const optionsHtml = q.options.map(opt => `
+    <button class="option is-multi ${selected.includes(opt.id) ? 'is-selected' : ''}" data-option-id="${opt.id}">
+      ${opt.label}
+    </button>
+  `).join('');
+  const inner = `
+    <div class="${cardClass()}">
+      <p class="eyebrow">Question ${num} of ${numberedStepIds.length}</p>
+      <h2 class="question-title">${q.title}</h2>
+      ${q.hint ? `<p class="question-hint">${q.hint}</p>` : ''}
+      <div class="options">${optionsHtml}</div>
+      <div class="nav-row">
+        <button class="btn btn-secondary" data-action="back">Back</button>
+        <button class="btn btn-primary" data-action="next" ${isAnswered(q) ? '' : 'disabled'}>Next</button>
+      </div>
+    </div>
+  `;
+  $app.innerHTML = renderQuizShell(inner);
+  $app.querySelectorAll('.option').forEach(btn => {
+    btn.addEventListener('click', () => toggleMulti(q.id, btn.dataset.optionId));
+  });
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+  $app.querySelector('[data-action="next"]').addEventListener('click', () => { if (isAnswered(q)) next(); });
+}
+
+function renderSilhouette() {
+  const q = currentQuestion();
+  const selected = state.answers[q.id];
+  const num = questionNumber(q);
+  const cellsHtml = q.options.map(opt => {
+    let figureHtml;
+    let optClass = '';
+    if (opt.figure === 'shifter-text') {
+      figureHtml = `${SHIFTER_ICON}<span>${opt.textContent}</span>`;
+      optClass = 'shifter-text-card';
+    } else {
+      figureHtml = `<div class="silhouette-placeholder" data-figure="${opt.figure}">
+        Silhouette image<br>${opt.figure}<br>(to be added)
+      </div>`;
+    }
+    return `
+      <button class="silhouette-option ${optClass} ${selected === opt.id ? 'is-selected' : ''}" data-option-id="${opt.id}">
+        <span class="silhouette-label">${opt.label}</span>
+        <span class="silhouette-figure">${figureHtml}</span>
+      </button>
+    `;
+  }).join('');
+  const inner = `
+    <div class="${cardClass()}">
+      <p class="eyebrow">Question ${num} of ${numberedStepIds.length}</p>
+      <h2 class="question-title">${q.title}</h2>
+      <div class="silhouette-grid">${cellsHtml}</div>
+      <div class="nav-row">
+        <button class="btn btn-secondary" data-action="back">Back</button>
+      </div>
+    </div>
+  `;
+  $app.innerHTML = renderQuizShell(inner);
+  $app.querySelectorAll('.silhouette-option').forEach(btn => {
+    btn.addEventListener('click', () => setAnswerAndAdvance(q.id, btn.dataset.optionId));
+  });
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+}
+
+function renderEmail() {
+  const q = currentQuestion();
+  const inner = `
+    <div class="${cardClass()}">
+      <h2 class="question-title email-title">${q.title}</h2>
+      <input type="email" class="email-field" id="emailInput"
+             placeholder="you@example.com" value="${state.email}"
+             autocomplete="email" inputmode="email">
+      <p class="email-microcopy">
+        We'll send them to this address. Unsubscribe anytime.
+        See our <a href="#" target="_blank">privacy policy</a>.
+      </p>
+      <div class="nav-row">
+        <button class="btn btn-secondary" data-action="back">Back</button>
+        <button class="btn btn-primary" id="emailSubmit" data-action="submit" ${isAnswered(q) ? '' : 'disabled'}>Send me my result</button>
+      </div>
+    </div>
+  `;
+  $app.innerHTML = renderQuizShell(inner);
+  const $emailInput = document.getElementById('emailInput');
+  const $emailSubmit = document.getElementById('emailSubmit');
+  $emailInput.addEventListener('input', e => {
+    state.email = e.target.value;
+    $emailSubmit.disabled = !isAnswered(q);
+  });
+  $emailInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && isAnswered(q)) submitEmail();
+  });
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+  $emailSubmit.addEventListener('click', submitEmail);
+}
+
+async function submitEmail() {
+  const q = currentQuestion();
+  if (!isAnswered(q) || state.emailSubmitting) return;
+
+  computeSubtype();
+  state.emailSubmitting = true;
+  trackMeta('Lead');
+
+  const $emailSubmit = document.getElementById('emailSubmit');
+  const prevLabel = $emailSubmit ? $emailSubmit.textContent : '';
+  if ($emailSubmit) {
+    $emailSubmit.disabled = true;
+    $emailSubmit.textContent = 'Sending…';
+  }
+
+  try {
+    await syncActiveCampaign(state.email, state.subtype, state.confidence, state.runnerUp, state.margin);
+  } catch (err) {
+    console.warn('ActiveCampaign sync failed:', err);
+  }
+
+  state.emailSubmitting = false;
+  next();
+  if ($emailSubmit) $emailSubmit.textContent = prevLabel;
+}
+
+function renderInterstitial() {
+  const q = currentQuestion();
+  const animClass = state.shouldAnimate ? ' is-entering' : '';
+  $app.innerHTML = renderQuizShell(`
+    <div class="interstitial-card${animClass}">
+      <p class="interstitial-eyebrow">${q.eyebrow}</p>
+      <p class="interstitial-body">${q.body}</p>
+      <div class="nav-row interstitial-nav">
+        <button class="btn btn-secondary" data-action="back">Back</button>
+        <button class="btn btn-primary" data-action="continue">Continue</button>
+      </div>
+    </div>
+  `);
+  $app.querySelector('[data-action="continue"]').addEventListener('click', next);
+  $app.querySelector('[data-action="back"]').addEventListener('click', back);
+}
+
+const REDIRECTS = {
+  holder:  'https://spinalhealthhub.com.au/quiz/thank-you',
+  slumper: 'https://spinalhealthhub.com.au/quiz/thank-you',
+  hanger:  'https://spinalhealthhub.com.au/quiz/thank-you',
+  shifter: 'https://spinalhealthhub.com.au/quiz/thank-you',
+};
+
+function buildRedirectUrl() {
+  const motivations = Array.isArray(state.answers.motivations)
+    ? state.answers.motivations.join(',')
+    : '';
+  const params = new URLSearchParams({
+    backType: state.subtype,
+    runnerUp: state.runnerUp,
+    margin: state.margin,
+    confidence: state.confidence,
+    motivations: motivations,
+  });
+  return `${REDIRECTS[state.subtype]}?${params.toString()}`;
+}
+
+function renderAnalysis() {
+  const redirectUrl = buildRedirectUrl();
+  const motivations = Array.isArray(state.answers.motivations)
+    ? state.answers.motivations.join(', ')
+    : '(none)';
+
+  const THEATRE_ICON_SVG = `
+    <svg class="theatre-icon-hourglass" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path class="hg-sand-top" d="M 7.5 4.5 L 18.5 4.5 L 13 12 Z" />
+      <rect class="hg-stream" x="12.5" y="11" width="1" height="4" />
+      <path class="hg-sand-bottom" d="M 13 14 L 18.5 21.5 L 7.5 21.5 Z" />
+      <path class="hg-frame" d="M 6.5 3.5 L 19.5 3.5 M 6.5 22.5 L 19.5 22.5 M 7.5 4.5 L 7.5 6 L 13 13 L 7.5 20 L 7.5 21.5 M 18.5 4.5 L 18.5 6 L 13 13 L 18.5 20 L 18.5 21.5" />
+    </svg>
+    <svg class="theatre-icon-tick" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="13" cy="13" r="11" fill="var(--sage)" />
+      <path d="M 7.5 13.5 L 11.5 17 L 18.5 9.5" fill="none" stroke="var(--cream)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  `;
+
+  const STEPS = [
+    { id: 'theatreLine0', main: 'Reviewing your symptom profile',                          sub: 'Background and reported symptoms',                                    duration: 1600 },
+    { id: 'theatreLine1', main: 'Analysing your postural patterns',                        sub: 'Postural self-image and automatic positioning',                       duration: 2000 },
+    { id: 'theatreLine2', main: 'Mapping your response to common movement and loading situations', sub: 'How your back responds across sitting, standing, walking, and lifting', duration: 2600 },
+    { id: 'theatreLine3', main: 'Reviewing your behaviour through discomfort',             sub: 'How you respond when your back acts up',                              duration: 2200 },
+    { id: 'theatreLine4', main: 'Matching to one of four back types',                      sub: 'Cross-referencing your responses with the four-pattern framework',    duration: 3200 },
+  ];
+
+  const stepsHtml = STEPS.map(s => `
+    <div class="theatre-line" id="${s.id}" style="--step-duration: ${s.duration}ms;">
+      <span class="theatre-icon">${THEATRE_ICON_SVG}</span>
+      <span class="theatre-line-text">
+        <span class="theatre-line-main">${s.main}</span>
+        <span class="theatre-line-sub">${s.sub}</span>
+      </span>
+    </div>
+  `).join('');
+
+  $app.innerHTML = `
+    <div class="theatre-screen">
+      <div class="theatre-lines">
+        ${stepsHtml}
+      </div>
+      <div class="theatre-reveal" id="theatreReveal">
+        <button class="theatre-reveal-cta" id="theatreRevealCta" data-action="reveal">
+          Get my back type
+          <span class="arrow">&rarr;</span>
+        </button>
+      </div>
+      <div class="result-debug" style="margin-top: 64px;">
+        <strong>DEBUG (remove before launch):</strong><br>
+        Subtype: ${state.subtype}<br>
+        Scores: H ${state.scores.holder} &middot; Sl ${state.scores.slumper} &middot; Hg ${state.scores.hanger} &middot; Sh ${state.scores.shifter}<br>
+        Confidence: <strong>${state.confidence}</strong> (margin ${state.margin} over runner-up: ${state.runnerUp})<br>
+        Email captured: ${state.email || '(none)'}<br>
+        Motivations: ${motivations || '(none)'}<br>
+        Would redirect to: ${redirectUrl}
+      </div>
+    </div>
+  `;
+
+  let cursor = 100;
+  STEPS.forEach((step, i) => {
+    setTimeout(() => {
+      document.getElementById(step.id)?.classList.add('is-visible');
+      if (i > 0) {
+        document.getElementById(STEPS[i - 1].id)?.classList.add('is-done');
+      }
+    }, cursor);
+    cursor += step.duration;
+  });
+  const finalDoneAt = cursor;
+  setTimeout(() => {
+    document.getElementById(STEPS[STEPS.length - 1].id)?.classList.add('is-done');
+  }, finalDoneAt);
+  setTimeout(() => {
+    document.getElementById('theatreReveal')?.classList.add('is-visible');
+  }, finalDoneAt + 600);
+
+  const revealBtn = document.getElementById('theatreRevealCta');
+  if (revealBtn) {
+    revealBtn.addEventListener('click', () => {
+      revealBtn.disabled = true;
+      next();
+    });
+  }
+}
+
+function renderResult() {
+  const redirectUrl = buildRedirectUrl();
+  const motivations = Array.isArray(state.answers.motivations)
+    ? state.answers.motivations.join(', ')
+    : '(none)';
+
+  if (!state.metaEvents.completeRegistration) {
+    state.metaEvents.completeRegistration = true;
+    trackMeta('CompleteRegistration', {
+      content_name: 'Back-Type Quiz Result',
+      content_category: state.subtype,
+    });
+  }
+
+  $app.innerHTML = `
+    <div class="theatre-screen">
+      <div class="result-redirect">
+        <span class="spinner spinner-large"></span>
+        <p class="result-redirect-text">Sending you to your result...</p>
+      </div>
+      <div class="result-debug" style="margin-top: 64px;">
+        <strong>DEBUG (remove before launch):</strong><br>
+        Subtype: ${state.subtype}<br>
+        Scores: H ${state.scores.holder} &middot; Sl ${state.scores.slumper} &middot; Hg ${state.scores.hanger} &middot; Sh ${state.scores.shifter}<br>
+        Confidence: <strong>${state.confidence}</strong> (margin ${state.margin} over runner-up: ${state.runnerUp})<br>
+        Email captured: ${state.email || '(none)'}<br>
+        Motivations: ${motivations}<br>
+        Would redirect to: ${redirectUrl}
+      </div>
+    </div>
+  `;
+
+//   Uncomment when result pages are live:
+  setTimeout(() => { window.location.href = redirectUrl; }, 400);
+
+}
+
+function renderDevNav() {
+  const labels = QUESTIONS.map((q, i) => {
+    if (q.type === 'intro') return { i, label: 'Intro' };
+    if (q.type === 'safety') return { i, label: 'Safety' };
+    if (q.type === 'interstitial') return { i, label: q.id === 'interstitial_1' ? 'Int1' : 'Int2' };
+    if (q.type === 'analysis') return { i, label: 'Analyse' };
+    if (q.type === 'email') return { i, label: 'Email' };
+    if (q.type === 'result') return { i, label: 'Result' };
+    const num = questionNumber(q);
+    return { i, label: `Q${num}` };
+  });
+  $devNav.innerHTML = `<span class="dev-nav-label">Dev jump:</span>` +
+    labels.map(({ i, label }) =>
+      `<button class="dev-jump ${state.step === i ? 'is-active' : ''}" data-step="${i}">${label}</button>`
+    ).join('');
+  $devNav.querySelectorAll('.dev-jump').forEach(btn => {
+    btn.addEventListener('click', () => goToStep(parseInt(btn.dataset.step, 10)));
+  });
+}
+
+function render() {
+  const q = currentQuestion();
+  if (q.type === 'intro')          renderIntro();
+  else if (q.type === 'safety')    renderSafety();
+  else if (q.type === 'interstitial') renderInterstitial();
+  else if (q.type === 'single')    renderSingle();
+  else if (q.type === 'multi')     renderMulti();
+  else if (q.type === 'silhouette') renderSilhouette();
+  else if (q.type === 'email')     renderEmail();
+  else if (q.type === 'analysis')  renderAnalysis();
+  else if (q.type === 'result')    renderResult();
+  updateChrome();
+  renderDevNav();
+  if (state.shouldAnimate) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+render();
+</script>
+</body>
+</html>
+```
