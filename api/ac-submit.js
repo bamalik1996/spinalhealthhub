@@ -3,15 +3,30 @@
    — syncs contact, adds to list, applies tag, sets custom fields
    ========================================================= */
 
-// ── Custom field IDs ──────────────────────────────────────
-// Find these in ActiveCampaign → Contacts → Manage Fields.
-// Each field has a numeric ID in the URL when you click to edit it.
-const FIELD_ID_CONFIDENCE = 1;   // TODO: replace with real ID
-const FIELD_ID_RUNNER_UP   = 2;   // TODO: replace with real ID
-const FIELD_ID_MARGIN      = 3;   // TODO: replace with real ID
-
 // ── List ID ───────────────────────────────────────────────
 const LIST_ID = 4; // Back-Type Quiz Leads
+
+// ── Field name → ID cache (populated at runtime) ──────────
+let fieldIdCache = null;
+
+async function getFieldIds(acBase, acHeaders) {
+  if (fieldIdCache) return fieldIdCache;
+
+  const res = await fetch(`${acBase}/fields?limit=100`, {
+    method: "GET",
+    headers: acHeaders,
+  });
+  const data = await res.json();
+
+  const map = {};
+  for (const f of (data.fields || [])) {
+    map[f.perstag.toLowerCase()] = f.id;
+    map[f.title.toLowerCase()]   = f.id;
+  }
+
+  fieldIdCache = map;
+  return map;
+}
 
 export default async function handler(req, res) {
 
@@ -43,18 +58,28 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "email is required" });
     }
 
-    // ── 1. Sync contact (upsert) ──────────────────────────
+    // ── 1. Resolve custom field IDs by name ──────────────
+    const fields = await getFieldIds(AC_BASE, AC_HEADERS);
+
+    // AC personalization tags are stored uppercased; titles are as-created.
+    // We index both lowercased so either form matches.
+    const idConfidence = fields["confidence"]  || fields["%confidence%"];
+    const idRunnerUp   = fields["runner-up"]   || fields["%runner-up%"]  || fields["runnerup"];
+    const idMargin     = fields["margin"]      || fields["%margin%"];
+
+    const fieldValues = [];
+    if (idConfidence) fieldValues.push({ field: String(idConfidence), value: confidence ?? "" });
+    if (idRunnerUp)   fieldValues.push({ field: String(idRunnerUp),   value: runnerUp  ?? "" });
+    if (idMargin)     fieldValues.push({ field: String(idMargin),     value: margin != null ? String(margin) : "" });
+
+    // ── 2. Sync contact (upsert) ──────────────────────────
     const syncRes = await fetch(`${AC_BASE}/contact/sync`, {
       method: "POST",
       headers: AC_HEADERS,
       body: JSON.stringify({
         contact: {
           email: email.trim(),
-          fieldValues: [
-            { field: String(FIELD_ID_CONFIDENCE), value: confidence ?? "" },
-            { field: String(FIELD_ID_RUNNER_UP),  value: runnerUp  ?? "" },
-            { field: String(FIELD_ID_MARGIN),      value: margin != null ? String(margin) : "" },
-          ],
+          fieldValues,
         },
       }),
     });
@@ -71,7 +96,7 @@ export default async function handler(req, res) {
       return res.status(502).json({ ok: false, error: "No contact ID returned from sync", detail: syncData });
     }
 
-    // ── 2. Add contact to list ────────────────────────────
+    // ── 3. Add contact to list ────────────────────────────
     const listRes = await fetch(`${AC_BASE}/contactLists`, {
       method: "POST",
       headers: AC_HEADERS,
@@ -91,7 +116,7 @@ export default async function handler(req, res) {
       // Non-fatal — continue to tag step
     }
 
-    // ── 3. Apply subtype tag ──────────────────────────────
+    // ── 4. Apply subtype tag ──────────────────────────────
     let tagResult = null;
 
     if (tag) {
@@ -130,6 +155,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       contactId,
+      fieldsMapped: { idConfidence, idRunnerUp, idMargin },
       listData,
       tagResult,
     });
