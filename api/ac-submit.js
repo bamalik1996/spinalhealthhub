@@ -6,6 +6,12 @@
 // ── List ID ───────────────────────────────────────────────
 const LIST_ID = 4; // Back-Type Quiz Leads
 
+// ── Allowed Origins ──────────────────────────────────────
+const allowedOrigins = [
+  "https://spinalhealthhub.com.au",
+  "https://www.spinalhealthhub.com.au",
+];
+
 // ── Field name → ID cache (populated at runtime) ──────────
 let fieldIdCache = null;
 
@@ -16,12 +22,13 @@ async function getFieldIds(acBase, acHeaders) {
     method: "GET",
     headers: acHeaders,
   });
+
   const data = await res.json();
 
   const map = {};
-  for (const f of (data.fields || [])) {
+  for (const f of data.fields || []) {
     map[f.perstag.toLowerCase()] = f.id;
-    map[f.title.toLowerCase()]   = f.id;
+    map[f.title.toLowerCase()] = f.id;
   }
 
   fieldIdCache = map;
@@ -29,11 +36,13 @@ async function getFieldIds(acBase, acHeaders) {
 }
 
 export default async function handler(req, res) {
+  const origin = req.headers.origin;
 
-  res.setHeader(
-    "Access-Control-Allow-Origin",
-    "https://www.spinalhealthhub.com.au"
-  );
+  // Allow only specified domains
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
@@ -42,10 +51,13 @@ export default async function handler(req, res) {
   }
 
   if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method not allowed" });
+    return res
+      .status(405)
+      .json({ ok: false, error: "Method not allowed" });
   }
 
   const AC_BASE = "https://spinalhealthhub.api-us1.com/api/3";
+
   const AC_HEADERS = {
     "Api-Token": process.env.AC_API_KEY,
     "Content-Type": "application/json",
@@ -55,22 +67,47 @@ export default async function handler(req, res) {
     const { email, tag, confidence, runnerUp, margin } = req.body;
 
     if (!email) {
-      return res.status(400).json({ ok: false, error: "email is required" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "email is required" });
     }
 
     // ── 1. Resolve custom field IDs by name ──────────────
     const fields = await getFieldIds(AC_BASE, AC_HEADERS);
 
-    // AC personalization tags are stored uppercased; titles are as-created.
-    // We index both lowercased so either form matches.
-    const idConfidence = fields["confidence"]  || fields["%confidence%"];
-    const idRunnerUp   = fields["runner-up"]   || fields["%runner-up%"]  || fields["runnerup"];
-    const idMargin     = fields["margin"]      || fields["%margin%"];
+    const idConfidence =
+      fields["confidence"] || fields["%confidence%"];
+
+    const idRunnerUp =
+      fields["runner-up"] ||
+      fields["%runner-up%"] ||
+      fields["runnerup"];
+
+    const idMargin =
+      fields["margin"] || fields["%margin%"];
 
     const fieldValues = [];
-    if (idConfidence) fieldValues.push({ field: String(idConfidence), value: confidence ?? "" });
-    if (idRunnerUp)   fieldValues.push({ field: String(idRunnerUp),   value: runnerUp  ?? "" });
-    if (idMargin)     fieldValues.push({ field: String(idMargin),     value: margin != null ? String(margin) : "" });
+
+    if (idConfidence) {
+      fieldValues.push({
+        field: String(idConfidence),
+        value: confidence ?? "",
+      });
+    }
+
+    if (idRunnerUp) {
+      fieldValues.push({
+        field: String(idRunnerUp),
+        value: runnerUp ?? "",
+      });
+    }
+
+    if (idMargin) {
+      fieldValues.push({
+        field: String(idMargin),
+        value: margin != null ? String(margin) : "",
+      });
+    }
 
     // ── 2. Sync contact (upsert) ──────────────────────────
     const syncRes = await fetch(`${AC_BASE}/contact/sync`, {
@@ -87,13 +124,21 @@ export default async function handler(req, res) {
     const syncData = await syncRes.json();
 
     if (!syncRes.ok) {
-      return res.status(502).json({ ok: false, error: "contact/sync failed", detail: syncData });
+      return res.status(502).json({
+        ok: false,
+        error: "contact/sync failed",
+        detail: syncData,
+      });
     }
 
     const contactId = syncData?.contact?.id;
 
     if (!contactId) {
-      return res.status(502).json({ ok: false, error: "No contact ID returned from sync", detail: syncData });
+      return res.status(502).json({
+        ok: false,
+        error: "No contact ID returned from sync",
+        detail: syncData,
+      });
     }
 
     // ── 3. Add contact to list ────────────────────────────
@@ -102,9 +147,9 @@ export default async function handler(req, res) {
       headers: AC_HEADERS,
       body: JSON.stringify({
         contactList: {
-          list:    LIST_ID,
+          list: LIST_ID,
           contact: contactId,
-          status:  1, // 1 = subscribed
+          status: 1, // subscribed
         },
       }),
     });
@@ -113,29 +158,38 @@ export default async function handler(req, res) {
 
     if (!listRes.ok) {
       console.error("contactLists failed:", listData);
-      // Non-fatal — continue to tag step
+      // Continue even if list subscription fails
     }
 
     // ── 4. Apply subtype tag ──────────────────────────────
     let tagResult = null;
 
     if (tag) {
-      // First, resolve (or create) the tag to get its ID
       const tagSearchRes = await fetch(
         `${AC_BASE}/tags?search=${encodeURIComponent(tag)}`,
-        { method: "GET", headers: AC_HEADERS }
+        {
+          method: "GET",
+          headers: AC_HEADERS,
+        }
       );
+
       const tagSearchData = await tagSearchRes.json();
 
       let tagId = tagSearchData?.tags?.[0]?.id ?? null;
 
       if (!tagId) {
-        // Tag doesn't exist yet — create it
         const createTagRes = await fetch(`${AC_BASE}/tags`, {
           method: "POST",
           headers: AC_HEADERS,
-          body: JSON.stringify({ tag: { tag, tagType: "contact", description: "" } }),
+          body: JSON.stringify({
+            tag: {
+              tag,
+              tagType: "contact",
+              description: "",
+            },
+          }),
         });
+
         const createTagData = await createTagRes.json();
         tagId = createTagData?.tag?.id ?? null;
       }
@@ -145,9 +199,13 @@ export default async function handler(req, res) {
           method: "POST",
           headers: AC_HEADERS,
           body: JSON.stringify({
-            contactTag: { contact: contactId, tag: tagId },
+            contactTag: {
+              contact: contactId,
+              tag: tagId,
+            },
           }),
         });
+
         tagResult = await applyTagRes.json();
       }
     }
@@ -155,12 +213,20 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       contactId,
-      fieldsMapped: { idConfidence, idRunnerUp, idMargin },
+      fieldsMapped: {
+        idConfidence,
+        idRunnerUp,
+        idMargin,
+      },
       listData,
       tagResult,
     });
-
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
   }
 }
