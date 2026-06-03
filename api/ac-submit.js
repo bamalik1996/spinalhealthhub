@@ -1,6 +1,6 @@
 /* =========================================================
    ActiveCampaign submission handler
-   — syncs contact, adds to list, applies tag, sets custom fields
+   s— syncs contact, adds to list, applies tag, sets custom fields
    ========================================================= */
 
 // ── List ID ───────────────────────────────────────────────
