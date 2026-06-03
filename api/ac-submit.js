@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
   res.setHeader(
     "Access-Control-Allow-Origin",
-    "https://spinal-health-hub.webflow.io"
+    "https://www.spinalhealthhub.com.au"
   );
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
